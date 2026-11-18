@@ -7,6 +7,10 @@ import java.util.Collections;
  * Se encarga de instanciar las 52 cartas iniciales, mezclarlas de forma aleatoria
  * y gestionar el reparto durante la partida.
  * 
+ * El apartado con el código sobre el valor del As en la partida (1 u 11) viene en la clase Jugador .
+ * 
+ * 
+ * 
  * @author Alejandro Martínez Torres
  * @version 1.0
  * @since 2026-11-17
