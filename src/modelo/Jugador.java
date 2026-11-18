@@ -7,7 +7,7 @@ import java.util.ArrayList;
  * calcular la puntuación en tiempo real, adaptando dinámicamente el valor de los Ases.
  * 
  * @author Alejandro Martínez Torres
- * @version 1.0
+ * @version 1.1
  * @since 2026-11-17
  */
 
@@ -70,6 +70,29 @@ public class Jugador {
         }
 
         return puntosTotales;
+    }
+    
+ // --- MÉTODOS DE LA BANCA ---
+
+    public int getSaldo() {
+        return saldo;
+    }
+
+    public void apostar(int cantidad) {
+        this.apuestaActual = cantidad;
+        this.saldo -= cantidad; // Restamos las fichas del bolsillo al ponerlas en la mesa
+    }
+
+    public void ganarApuesta() {
+        this.saldo += (this.apuestaActual * 2); // Recuperas lo apostado y ganas lo mismo del casino
+    }
+
+    public void recuperarApuesta() {
+        this.saldo += this.apuestaActual; // En caso de empate, la ficha vuelve a tu bolsillo
+    }
+    // Hacemos un método para que al jugador se le quiten las cartas antes de la siguiente mano.
+    public void vaciarMano() {
+        this.mano.clear(); 
     }
 
 }
