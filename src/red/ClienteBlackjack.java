@@ -15,20 +15,20 @@ import javax.swing.JOptionPane;
 import javax.swing.Timer;
 
 import vista.VistaCliente;
+import vista.VistaLogin;
 
 /**
  * Controlador de red del cliente para el Blackjack multijugador.
- * Establece la conexión TCP con el servidor, gestiona el envío de acciones desde
- * VistaCliente, mantiene un hilo de escucha para los mensajes entrantes e implementa
- * la lógica de decisión del modo automático.
+ * Gestiona la comunicación entre VistaLogin, VistaCliente y el servidor TCP.
  *
  * @author Alejandro Martínez Torres
- * @version 1.0
+ * @version 3.0
  * @since 2026-11-19
  */
 public class ClienteBlackjack {
 
     private final VistaCliente vista;
+    private final VistaLogin vistaLogin;
 
     private Socket socket;
     private BufferedReader entrada;
@@ -39,20 +39,20 @@ public class ClienteBlackjack {
     private volatile int puntosActuales = 0;
     private volatile boolean accionAutoPendiente = false;
 
-    public ClienteBlackjack(VistaCliente vista) {
+    public ClienteBlackjack(VistaLogin vistaLogin, VistaCliente vista) {
+        this.vistaLogin = vistaLogin;
         this.vista = vista;
-        configurarEventos();
+        configurarEventosVista();
     }
 
-    private void configurarEventos() {
-        vista.getBtnConectar().addActionListener(e -> conectar());
+    private void configurarEventosVista() {
         vista.getBtnDesconectar().addActionListener(e -> desconectar());
 
         vista.getBtnListo().addActionListener(e -> {
             if (conectado) {
                 vista.setListoHabilitado(false);
                 vista.limpiarMesa();
-                vista.actualizarEstado("Listo. Esperando al resto de jugadores...");
+                vista.actualizarEstado("Apuesta realizada (10 🪙). Esperando al resto...");
                 enviar(Protocolo.LISTO);
             }
         });
@@ -76,28 +76,23 @@ public class ClienteBlackjack {
         vista.getChkModoAuto().addActionListener(e -> {
             vista.setTurnoActivo(esMiTurno);
             if (vista.isModoAutoActivo()) {
-                vista.agregarMensaje("[Sistema] Modo Automático activado (se planta con 17 o más).");
+                vista.agregarMensaje("[Sistema] Modo Automático activado.");
                 if (esMiTurno) {
                     programarJugadaAutomatica();
                 }
             } else {
-                vista.agregarMensaje("[Sistema] Modo Automático desactivado (control manual).");
+                vista.agregarMensaje("[Sistema] Modo Automático desactivado.");
             }
         });
 
         vista.getBtnMisEstadisticas().addActionListener(e -> {
-            if (conectado) {
-                enviar(Protocolo.STATS);
-            }
+            if (conectado) enviar(Protocolo.STATS);
         });
 
         vista.getBtnVerRanking().addActionListener(e -> {
-            if (conectado) {
-                enviar(Protocolo.RANKING);
-            }
+            if (conectado) enviar(Protocolo.RANKING);
         });
 
-        // Cierre limpio del socket si el usuario cierra la ventana con la X
         vista.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
@@ -106,31 +101,13 @@ public class ClienteBlackjack {
         });
     }
 
-    /**
-     * Valida los campos de acceso y abre el socket TCP en un hilo secundario
-     * para no bloquear el hilo gráfico de Swing.
-     */
-    private void conectar() {
-        String host = vista.getHost();
-        String usuario = vista.getNombreUsuario();
-        String password = vista.getPassword();
-
-        if (host.isEmpty() || usuario.isEmpty() || password.isEmpty()) {
-            JOptionPane.showMessageDialog(vista,
-                    "Debes rellenar IP, usuario y contraseña.",
-                    "Datos incompletos", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
+    public void conectar(String host, String usuario, String password, String tipoAccion) {
         if (usuario.contains(Protocolo.SEP) || password.contains(Protocolo.SEP)) {
-            JOptionPane.showMessageDialog(vista,
+            JOptionPane.showMessageDialog(vistaLogin,
                     "El usuario y la contraseña no pueden contener el carácter '" + Protocolo.SEP + "'.",
                     "Carácter no permitido", JOptionPane.WARNING_MESSAGE);
             return;
         }
-
-        vista.getBtnConectar().setEnabled(false);
-        vista.actualizarEstado("Conectando a " + host + ":" + Protocolo.PUERTO + "...");
 
         Thread hiloConexion = new Thread(() -> {
             try {
@@ -142,75 +119,72 @@ public class ClienteBlackjack {
 
                 conectado = true;
 
-                // Enviamos las credenciales nada más abrir el canal
-                enviar(Protocolo.LOGIN + Protocolo.SEP + usuario + Protocolo.SEP + password);
+                String comando = "LOGIN".equals(tipoAccion) ? Protocolo.LOGIN : Protocolo.REGISTRO;
+                enviar(comando + Protocolo.SEP + usuario + Protocolo.SEP + password);
 
-                // Bucle bloqueante de escucha de mensajes del servidor
                 escucharServidor();
 
             } catch (IOException ex) {
-                if (conectado) {
-                    vista.agregarMensaje("[Red] Se perdió la conexión con el servidor.");
-                } else {
-                    vista.agregarMensaje("[Red] No se pudo conectar con " + host + ":" + Protocolo.PUERTO
-                            + " (" + ex.getMessage() + ")");
+                if (!conectado) {
+                    JOptionPane.showMessageDialog(vistaLogin,
+                            "No se pudo conectar con el servidor en " + host + ":" + Protocolo.PUERTO,
+                            "Error de conexión", JOptionPane.ERROR_MESSAGE);
+                    vistaLogin.setVisible(true);
                 }
                 cerrarRecursosRed();
-                vista.setConectado(false);
             }
         }, "Hilo-Escucha-Cliente");
 
         hiloConexion.start();
     }
 
-    /**
-     * Lee línea a línea los comandos que llegan por el socket hasta que el servidor
-     * cierra la conexión o el cliente se desconecta.
-     */
     private void escucharServidor() throws IOException {
         String linea;
         while (conectado && (linea = entrada.readLine()) != null) {
             procesarMensaje(linea);
         }
 
-        // Si readLine() devuelve null, el servidor cerró la conexión limpiamente
         if (conectado) {
-            vista.agregarMensaje("[Red] El servidor ha cerrado la conexión.");
+            vista.agregarMensaje("[Red] Se perdió la conexión con el servidor.");
             cerrarRecursosRed();
             vista.setConectado(false);
+            vista.setVisible(false);
+            vistaLogin.setVisible(true);
         }
     }
 
-    /**
-     * Interpreta cada mensaje recibido según las reglas de Protocolo y actualiza la vista.
-     */
     private void procesarMensaje(String linea) {
         String[] partes = linea.split(Protocolo.SEP_REGEX, -1);
         String comando = partes[0];
 
         switch (comando) {
             case Protocolo.LOGIN_OK:
-                String nombreValidado = partes.length > 1 ? partes[1] : vista.getNombreUsuario();
+            case Protocolo.REGISTRO_OK:
+                String usuario = partes.length > 1 ? partes[1] : "Jugador";
+                String saldo = partes.length > 2 ? partes[2] : "100";
+
+                vistaLogin.dispose();
+                vista.setVisible(true);
                 vista.setConectado(true);
+                vista.actualizarSaldo(saldo);
                 vista.limpiarMesa();
-                vista.actualizarEstado("Conectado como " + nombreValidado + ". Pulsa 'Listo / Nueva Ronda'.");
-                vista.agregarMensaje("=== Sesión iniciada correctamente como " + nombreValidado + " ===");
+                vista.actualizarEstado("Conectado como " + usuario + ". Pulsa 'Listo / Apostar'.");
+                vista.agregarMensaje("=== Sesión iniciada. Fichas: " + saldo + " 🪙 ===");
                 break;
 
             case Protocolo.LOGIN_ERROR:
-                String motivo = partes.length > 1 ? partes[1] : "Credenciales inválidas.";
-                vista.agregarMensaje("[Acceso denegado] " + motivo);
-                desconectar();
+            case Protocolo.REGISTRO_ERROR:
+                String motivo = partes.length > 1 ? partes[1] : "Error de autenticación.";
+                JOptionPane.showMessageDialog(vistaLogin, motivo, "Acceso Denegado", JOptionPane.WARNING_MESSAGE);
+                cerrarRecursosRed();
+                vistaLogin.setVisible(true);
                 break;
 
             case Protocolo.ESTADO:
-                if (partes.length > 1) {
-                    vista.actualizarEstado(partes[1]);
-                }
+                if (partes.length > 1) vista.actualizarEstado(partes[1]);
                 break;
 
             case Protocolo.MESA:
-                // Formato: MESA|cartasJugador|puntosJugador|cartasCrupier|puntosCrupier
                 if (partes.length >= 5) {
                     String cartasJugador = partes[1];
                     int ptsJugador = parseEnteroSeguro(partes[2]);
@@ -228,14 +202,12 @@ public class ClienteBlackjack {
                     esMiTurno = true;
                     vista.actualizarEstado("¡Es tu turno!");
                     vista.setTurnoActivo(true);
-                    if (vista.isModoAutoActivo()) {
-                        programarJugadaAutomatica();
-                    }
+                    if (vista.isModoAutoActivo()) programarJugadaAutomatica();
                 } else {
                     esMiTurno = false;
                     vista.setTurnoActivo(false);
-                    String otroJugador = partes.length >= 3 ? partes[2] : "otro jugador";
-                    vista.actualizarEstado("Esperando turno de " + otroJugador + "...");
+                    String otro = partes.length >= 3 ? partes[2] : "otro jugador";
+                    vista.actualizarEstado("Esperando turno de " + otro + "...");
                 }
                 break;
 
@@ -243,100 +215,98 @@ public class ClienteBlackjack {
                 esMiTurno = false;
                 vista.setTurnoActivo(false);
                 vista.setListoHabilitado(true);
-                if (partes.length > 1) {
+                if (partes.length >= 3) {
+                    vista.agregarMensaje(Protocolo.decodificarTexto(partes[1]));
+                    vista.actualizarSaldo(partes[2]);
+                } else if (partes.length > 1) {
                     vista.agregarMensaje(Protocolo.decodificarTexto(partes[1]));
                 }
-                vista.actualizarEstado("Ronda finalizada. Pulsa 'Listo / Nueva Ronda' para jugar otra.");
+                vista.actualizarEstado("Ronda finalizada. Pulsa 'Listo / Apostar' para otra mano.");
                 break;
 
             case Protocolo.INFO:
-                if (partes.length > 1) {
-                    vista.agregarMensaje(Protocolo.decodificarTexto(partes[1]));
-                }
+                if (partes.length > 1) vista.agregarMensaje(Protocolo.decodificarTexto(partes[1]));
                 break;
 
             default:
-                vista.agregarMensaje("[Servidor] " + linea);
                 break;
         }
     }
 
-    /**
-     * Ejecuta una jugada automática tras una breve pausa visual (800 ms):
-     * pide carta si la mano suma menos de 17 y se planta con 17 o más.
-     */
     private void programarJugadaAutomatica() {
-        if (accionAutoPendiente) {
-            return;
-        }
+        if (accionAutoPendiente) return;
         accionAutoPendiente = true;
 
-        Timer temporizador = new Timer(800, e -> {
+        Timer t = new Timer(800, e -> {
             accionAutoPendiente = false;
-            if (!conectado || !esMiTurno || !vista.isModoAutoActivo()) {
-                return;
-            }
+            if (!conectado || !esMiTurno || !vista.isModoAutoActivo()) return;
             esMiTurno = false;
             vista.setTurnoActivo(false);
 
             if (puntosActuales < 17) {
-                vista.agregarMensaje("[Modo Auto] " + puntosActuales + " puntos (< 17) -> Pidiendo carta...");
+                vista.agregarMensaje("[Modo Auto] " + puntosActuales + " pts (< 17) -> Pidiendo carta...");
                 enviar(Protocolo.PEDIR);
             } else {
-                vista.agregarMensaje("[Modo Auto] " + puntosActuales + " puntos (>= 17) -> Plantándose.");
+                vista.agregarMensaje("[Modo Auto] " + puntosActuales + " pts (>= 17) -> Plantándose.");
                 enviar(Protocolo.PLANTARSE);
             }
         });
-        temporizador.setRepeats(false);
-        temporizador.start();
+        t.setRepeats(false);
+        t.start();
     }
 
     private synchronized void enviar(String mensaje) {
-        if (salida != null) {
-            salida.println(mensaje);
-        }
+        if (salida != null) salida.println(mensaje);
     }
 
     private void desconectar() {
-        boolean estabaConectado = conectado;
         conectado = false;
         esMiTurno = false;
-
-        if (estabaConectado) {
-            enviar(Protocolo.DESCONECTAR);
-            vista.agregarMensaje("[Red] Desconectado del servidor.");
-        }
-
+        enviar(Protocolo.DESCONECTAR);
         cerrarRecursosRed();
-        vista.setConectado(false);
+        vista.setVisible(false);
+        vistaLogin.setVisible(true);
     }
 
     private void cerrarRecursosRed() {
-        try {
-            if (entrada != null) entrada.close();
-        } catch (IOException ignored) {}
-        if (salida != null) {
-            salida.close();
-        }
-        try {
-            if (socket != null && !socket.isClosed()) socket.close();
-        } catch (IOException ignored) {}
+        try { if (entrada != null) entrada.close(); } catch (IOException ignored) {}
+        if (salida != null) salida.close();
+        try { if (socket != null && !socket.isClosed()) socket.close(); } catch (IOException ignored) {}
     }
 
-    private int parseEnteroSeguro(String valor) {
-        try {
-            return Integer.parseInt(valor.trim());
-        } catch (NumberFormatException e) {
-            return 0;
-        }
+    private int parseEnteroSeguro(String v) {
+        try { return Integer.parseInt(v.trim()); } catch (Exception e) { return 0; }
     }
 
     public static void main(String[] args) {
         EventQueue.invokeLater(() -> {
-            VistaCliente vista = new VistaCliente();
-            vista.setLocationRelativeTo(null);
-            new ClienteBlackjack(vista);
-            vista.setVisible(true);
+            VistaLogin vistaLogin = new VistaLogin();
+            VistaCliente vistaCliente = new VistaCliente();
+            ClienteBlackjack controlador = new ClienteBlackjack(vistaLogin, vistaCliente);
+
+            vistaLogin.getBtnIniciarSesion().addActionListener(e -> {
+                if (vistaLogin.isDatosValidados()) {
+                    controlador.conectar(
+                        vistaLogin.getHost(), 
+                        vistaLogin.getUsuario(), 
+                        vistaLogin.getPassword(), 
+                        "LOGIN"
+                    );
+                }
+            });
+
+            vistaLogin.getBtnRegistrarse().addActionListener(e -> {
+                if (vistaLogin.isDatosValidados()) {
+                    controlador.conectar(
+                        vistaLogin.getHost(), 
+                        vistaLogin.getUsuario(), 
+                        vistaLogin.getPassword(), 
+                        "REGISTRO"
+                    );
+                }
+            });
+
+            vistaLogin.setVisible(true);
         });
     }
 }

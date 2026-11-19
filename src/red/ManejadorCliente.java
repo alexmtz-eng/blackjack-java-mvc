@@ -12,11 +12,9 @@ import modelo.Jugador;
 
 /**
  * Hilo dedicado a gestionar la comunicación TCP de un cliente concreto dentro del servidor.
- * Mantiene el socket, los flujos de entrada y salida en UTF-8, el estado del jugador
- * en la ronda actual y reenvía cada mensaje entrante a ServidorBlackjack.
  *
  * @author Alejandro Martínez Torres
- * @version 1.0
+ * @version 2.0
  * @since 2026-11-19
  */
 public class ManejadorCliente implements Runnable {
@@ -85,47 +83,20 @@ public class ManejadorCliente implements Runnable {
         return (jugador != null) ? jugador.getNombre() : socket.getRemoteSocketAddress().toString();
     }
 
-    public Jugador getJugador() {
-        return jugador;
-    }
+    public Jugador getJugador() { return jugador; }
+    public void setJugador(Jugador jugador) { this.jugador = jugador; }
 
-    public void setJugador(Jugador jugador) {
-        this.jugador = jugador;
-    }
+    public boolean isAutenticado() { return autenticado; }
+    public void setAutenticado(boolean autenticado) { this.autenticado = autenticado; }
 
-    public boolean isAutenticado() {
-        return autenticado;
-    }
+    public boolean isListo() { return listo; }
+    public void setListo(boolean listo) { this.listo = listo; }
 
-    public void setAutenticado(boolean autenticado) {
-        this.autenticado = autenticado;
-    }
+    public boolean isEnRonda() { return enRonda; }
+    public void setEnRonda(boolean enRonda) { this.enRonda = enRonda; }
 
-    public boolean isListo() {
-        return listo;
-    }
+    public boolean isTurnoTerminado() { return turnoTerminado; }
+    public void setTurnoTerminado(boolean turnoTerminado) { this.turnoTerminado = turnoTerminado; }
 
-    public void setListo(boolean listo) {
-        this.listo = listo;
-    }
-
-    public boolean isEnRonda() {
-        return enRonda;
-    }
-
-    public void setEnRonda(boolean enRonda) {
-        this.enRonda = enRonda;
-    }
-
-    public boolean isTurnoTerminado() {
-        return turnoTerminado;
-    }
-
-    public void setTurnoTerminado(boolean turnoTerminado) {
-        this.turnoTerminado = turnoTerminado;
-    }
-
-    public boolean isActivo() {
-        return activo;
-    }
+    public boolean isActivo() { return activo; }
 }
