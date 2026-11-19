@@ -5,6 +5,20 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+/**
+ * Objeto de Acceso a Datos (DAO) encargado de todas las operaciones CRUD y consultas
+ * estadísticas sobre la tabla {@code jugadores} en MySQL.
+ *
+ * Encapsula las sentencias SQL necesarias para el servidor del Blackjack multijugador:
+ * autenticación y registro automático de usuarios, actualización de partidas
+ * (jugadas, ganadas, empatadas y perdidas), consulta de perfiles individuales,
+ * obtención del listado de jugadores registrados, eliminación de cuentas y cálculo
+ * del ranking ordenado por porcentaje de victorias.
+ *
+ * @author Alejandro Martínez Torres
+ * @version 1.0
+ * @since 2026-11-19
+ */
 
 public class JugadorDAO {
 

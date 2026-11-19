@@ -3,6 +3,18 @@ package bbdd;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+/**
+ * Gestiona la conexión JDBC entre el servidor del juego y la base de datos local MySQL
+ * ({@code casino_blackjack}).
+ *
+ * Centraliza los parámetros de acceso (URL, usuario y contraseña) y carga el driver
+ * oficial {@code com.mysql.cj.jdbc.Driver} para proporcionar objetos {@link Connection}
+ * listos para ser consumidos por las clases DAO.
+ *
+ * @author Alejandro Martínez Torres
+ * @version 1.0
+ * @since 2026-11-19
+ */
 
 public class Conexion {
 
