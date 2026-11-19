@@ -32,6 +32,7 @@ import bbdd.JugadorDAO;
  * del ranking ordenado por porcentaje de victorias.
  *
  * @author Alejandro Martínez Torres
+ * @version 1.1
  * @since 2026-11-19
  */
 public class VistaServidor extends JFrame {
@@ -224,7 +225,9 @@ public class VistaServidor extends JFrame {
     public void actualizarConectados(int cantidad, String nombres) {
         SwingUtilities.invokeLater(() -> {
             String detalle = (nombres == null || nombres.isEmpty()) ? "" : " (" + nombres + ")";
-            lblConectados.setText("Conectados: " + cantidad + detalle);
+            String texto = "Conectados: " + cantidad + detalle;
+            lblConectados.setText(texto);
+            lblConectados.setToolTipText(texto);
         });
     }
 
